@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# dsh-ai-import bundle patch: mounts the multi-source AI conversation import plugin.
+- insert:
+    - id: ai-import
+      name: dsh-ai-import

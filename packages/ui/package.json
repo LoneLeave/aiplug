@@ -1,0 +1,64 @@
+{
+  "name": "dsh-ai-import-ui",
+  "version": "0.2.0",
+  "description": "Web panel for dsh-ai-import: browse local AI-assistant histories, preview each conversation, pick what to import, and file it into a workspace folder.",
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.mjs",
+    "client.js",
+    "assets",
+    "screenshots.json",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "peerDependencies": {
+    "dsh-ai-import": ">=0.2.0"
+  },
+  "peerDependenciesMeta": {
+    "dsh-ai-import": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.9.0",
+    "dsh": ">=0.2.0-0 <0.3.0 || >=0.2.1-rc.1 <0.3.0 || >=0.2.2-0 <0.3.0"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "session-import",
+    "web-ui",
+    "claude-code",
+    "codex",
+    "cursor"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LoneLeave/aiplug.git",
+    "directory": "packages/ui"
+  },
+  "homepage": "https://github.com/LoneLeave/aiplug#readme",
+  "bugs": {
+    "url": "https://github.com/LoneLeave/aiplug/issues"
+  }
+}
