@@ -116,8 +116,11 @@ at any time. When `localStorage` is unavailable the card appears once per sessio
 ## Install and how changes take effect
 
 ```sh
-dsh plugin add dsh-ai-import-ui
+dsh plugin add github:LoneLeave/aiplug                     # the host half this panel talks to
+dsh plugin add "github:LoneLeave/aiplug&path:/packages/ui" # the panel itself
 ```
+
+(Once on npm: `dsh plugin add dsh-ai-import` / `dsh plugin add dsh-ai-import-ui`.)
 
 Then reload the Web UI page.
 

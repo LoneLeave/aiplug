@@ -18,10 +18,15 @@ two can be used interchangeably.
 
 ## Install
 
+From this repository (works today — the packages are not on npm yet):
+
 ```sh
-dsh plugin add dsh-ai-import        # the converter only, command-line + agent tools
-dsh plugin add dsh-ai-import-ui     # adds the Web panel on top of the converter
+dsh plugin add github:LoneLeave/aiplug                     # the converter: command-line + agent tools
+dsh plugin add "github:LoneLeave/aiplug&path:/packages/ui" # adds the Web panel on top of it
 ```
+
+Once published to npm the same two lines become `dsh plugin add dsh-ai-import` and
+`dsh plugin add dsh-ai-import-ui`.
 
 Install both if you want the panel: `dsh-ai-import-ui` imports `dsh-ai-import/lib/*` directly and
 does nothing useful without it. After installing, reload the DSH Web UI page.
