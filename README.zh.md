@@ -75,17 +75,27 @@
 
 ## 命名规则（按优先级）
 
-1. 来源自带的标题：Claude 的 `custom-title` / `ai-title` 记录、Codex 的 `session_index.jsonl` 的 `thread_name`、Cursor 的 composer `name`；
+1. 来源自带的标题：Claude 的 `custom-title` / `ai-title` 记录、Codex 的 `state_5.sqlite` 的 `threads.name` / `threads.title`（没有就退到 `session_index.jsonl` 的 `thread_name`）、Cursor 的 composer `name`；
 2. 首条人类提问的第一行（自动剥掉 `<system-reminder>`、`<user_info>`、`<project_layout>`、`# AGENTS.md instructions`、`@skill:"…"`、Codex 的评审转写模板之类注入噪声），再压到第一个句末标点，最多 56 字；
 3. `<来源> <日期 时间>`；
 4. `<来源> 会话 N`。
 
 默认加 `[Claude]` / `[Codex]` / `[WorkBuddy]` / `[Cursor]` 前缀（`titlePrefixSource: false` 可关闭）。同一分组内重名会自动追加 ` · #n`，不会出现一堆同名会话。
 
-两个「看起来是标题、其实不是」的坑已经处理掉：
+三个「看起来是标题、其实不是」的坑已经处理掉：
 
-- **Codex 的 `thread_name` 有重复值**：`Guardian review`（12 次）、`每周回顾`（8 次）、`hi`（2 次）是自动化任务的固定名，不是会话内容。只有在整个 index 里**只出现一次**的名字才当作标题，重复的一律退回首问或日期。
+- **Codex 的 `thread_name` 有重复值**：`Guardian review`（45 次）、`每周回顾`（8 次）、`hi`（2 次）是自动化任务的固定名，不是会话内容。只有在整个 index 里**只出现一次**的名字才当作标题，重复的一律退回首问或日期。`state_5.sqlite` 的 `threads.name` 走同一套唯一性判断，且只统计真人对话的重名。
+- **Codex 的内部线程**：`guardian_review`（自动评审，42 条）、`subagent`（子代理，60 条）、`automation`（定时任务，8 条）不是你和 Codex 的对话，标题也常常是同一串，默认跳过并在来源卡片里计入「过滤」。需要的话把 `codexIncludeInternal` 打开。
 - **Cursor 未命名的 composer**：`name` 字段就是一串 UUID，等于没有名字，改用它自己的首条提问。
+
+## Codex 的会话是新版压缩格式
+
+新版 Codex 把 rollout 写成了 `rollout-*.jsonl.zst`（zstd 压缩），老版本插件只认 `.jsonl`，于是 Codex 卡片会是空的。现在两种都能读：`.zst` 先用 `node:zlib` 的 `zstdDecompressSync` 解压，再走原来的 `convertCodexJsonl`。
+
+两点副作用值得知道：
+
+- 需要 Node 22.15+ / 24.9+ 才有 zstd（DSH 宿主是 Node 24，本机 CLI 是 24.21，都满足）。老的 Node 上会跳过压缩文件并在错误列表里说明原因。
+- 单个 rollout 解压后有 300 MB 量级（本机最大的一个 218 MB → 301 MB，单文件峰值内存约 1.7 GB），所以导入是**串行**的，不会并发吃内存。第一次导入几十个会话要等一会儿。
 
 ## 分组规则
 
@@ -133,6 +143,30 @@ DSH 读会话时会强制校验工具调用的生命周期（`dsh-session-persis
 
 `validateSessionEvents`（`lib/vendor/convert.mjs`）已内置同一套生命周期检查，作为落盘前的闸门。
 
+## 会话要有受保护的 system 头（v4 格式，改动前必读）
+
+新版 DSH（0.2.1-rc.5 起）对 v4 会话加了一条规则：`system/message` **只能是 surface 里的第一个节点**。
+
+- `system/message` 出现在 `surface.length > 0` 之后、且此前没有 `protectedHead` 时，直接抛
+  `system/message requires a protected first surface head`（`worker.cjs` 的 `Relationships.foldSurface`）；
+- 只有 `surface.length === 0` 的那条 `system/message` 会被记为 `protectedHead`；
+- 之后想改这个 system 提示，只能用 `surfaceOp: replace` 替换 head 本身。
+
+问题在于：一份**没有** system/message 的会话（我们以前的导入就是这种），一旦用户在里面继续提问，
+`SystemPromptProjection.project()` 发现 `head === undefined`，就会把 system 消息 **append 到中途**——
+文件立刻变成非法，会话再也打不开。这不是导入时的错，是"导入会话 + 续聊"必踩的坑。
+
+所以现在导入时就在第一轮第一个 `step/start` 之后、第一条 `user/message` 之前写一条**空内容**的
+system/message（`content: []`、`source.kind: 'system-prompt'`）：
+
+- 它占住 `protectedHead`，续聊时 `project()` 走 `replace(head)` 分支，合法；
+- 空内容意味着 `systemNodes()` 算出的 `text` 是 `''`，不会和真正的系统提示冲突；
+- 只有提问、没有回复的轮次原来没有 step，现在补一个 `step/start … step/end` 把这个 head 包进去
+  （head 必须落在 open step 内，否则报 `system/message does not match an open step`）。
+
+老会话（0.2.0 之前导入的）用 `tools/repair-system-head.mjs` 就地补齐。改完记得跑
+`node tools/verify-all.mjs`，它用 DSH 自己的校验 worker 过一遍，能提前发现这类格式问题。
+
 ## 会话标题与投影缓存（为什么导入后列表显示「未命名」）
 
 DSH 的会话列表对**未打开**（cold）的会话只读投影缓存，不读日志：
@@ -178,6 +212,10 @@ DSH 的会话列表对**未打开**（cold）的会话只读投影缓存，不�
 | `title-audit.mjs` | 统计导入会话的标题事件与投影缓存覆盖情况 |
 | `backfill-titles.mjs` | 回填投影缓存；日志里没有标题的会话会派生一条并**追加真事件**（`--dry` 只报告） |
 | `verify-projcache.mjs` | 用宿主的 `checkpointRecord` zod schema 校验回填的缓存文档 |
+| `repair-system-head.mjs` | 给 0.2.0 之前导入的老会话补第一条空 `system/message` 并重编号；`--dry` 只报告 |
+| `harness-paths.mjs` | 动态定位当前 harness 安装里的 `worker.cjs` / 投影缓存模块（升级后路径会变，工具不再写死） |
+| `probe-sysmsg.mjs` | 扫全部会话，报告 `system/message` 的位置是否合法（`ok` / `MID` / `no-sys`） |
+| `probe-events.mjs` | 打印一个会话的事件流 `seq / type / surfaceOp`，标出第一个 surface 事件 |
 
 会话文件是多帧拼接 zstd，必须按帧解压（`zstdDecompressSync(buf.slice(off), {info:true})`
 配 `engine.bytesWritten` 推进），只重压改动过的帧。追加事件的方式要与宿主
@@ -198,6 +236,7 @@ DSH 的会话列表对**未打开**（cold）的会话只读投影缓存，不�
       includePromptOnlySources: false   # true 时连 Trae 的「只有提问」也导入
       cursorIncludeArchived: false
       cursorIncludeSubagents: false
+      codexIncludeInternal: false         # true 时也导入 Codex 的 guardian_review / subagent / automation 内部线程
       titlePrefixSource: true
       streamThresholdBytes: 209715200
 ```
@@ -229,7 +268,7 @@ DSH 的会话列表对**未打开**（cold）的会话只读投影缓存，不�
 | 来源 | 位置 | 正文完整度 |
 | --- | --- | --- |
 | Claude Code | `~/.claude/projects/*/*.jsonl` | 完整 |
-| Codex | `~/.codex/sessions/**/rollout-*.jsonl` + `archived_sessions/` | 完整 |
+| Codex | `~/.codex/sessions/**/rollout-*.jsonl`（新版是 `.jsonl.zst`）+ `archived_sessions/`；标题取 `~/.codex/state_5.sqlite` 的 `threads` 表 | 完整 |
 | WorkBuddy | `~/.workbuddy/projects/*/*.jsonl` | 完整 |
 | Cursor | `%APPDATA%/Cursor/User/globalStorage/state.vscdb`（`composerHeaders` + `cursorDiskKV` 的 `bubbleId:`） | 完整（工具气泡无文本，跳过） |
 | Trae | `%APPDATA%/Trae*/User/workspaceStorage/*/state.vscdb` | **仅用户提问**，无助手回复 |

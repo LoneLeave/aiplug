@@ -137,6 +137,23 @@ Then reload the Web UI page.
 `assets/screenshot-1.png` (simple drawer), `assets/screenshot-2.png` (pick mode),
 `assets/screenshot-3.png` (folder browser), listed in `screenshots.json` next to `package.json`.
 
+## If the panel does not appear
+
+The market's on/off switch writes `- id: <plugin>\n  disabled: true` into the profile's
+`cordis.patch.yml`. That patch is applied *after* the profile's bundle list, so a plugin can be listed
+as installed and enabled while the patch still keeps it switched off. Toggling it through the plugin
+manager updates the bundle list but does not rewrite that patch line.
+
+Symptom: the `/api/ai-import/*` routes return 404 and the client module is missing from the boot HTML.
+Fix: set the `disabled:` value for both `ai-import` and `ai-import-ui` in
+`<DSH_HOME>/profiles/<profile>/cordis.patch.yml` to `false` (or delete those two rows) — the profile
+watches the file and reloads within about a second, no app restart needed.
+
+## Requirements
+
+- DSH `0.2.x` (`engines.dsh` in `package.json`); last verified against `0.2.1-rc.5`.
+- The host half `dsh-ai-import` must be installed too: the panel imports `dsh-ai-import/lib/*.mjs`.
+
 ## License
 
 Apache-2.0. 中文说明见 [README.zh.md](README.zh.md).

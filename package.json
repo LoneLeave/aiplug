@@ -1,6 +1,6 @@
 {
   "name": "dsh-ai-import",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Import local AI-assistant histories (Claude Code, Codex, WorkBuddy, Cursor, Trae) into DeepSeek Harness as resumable sessions, with readable titles and one workspace per source.",
   "type": "module",
   "main": "./index.mjs",

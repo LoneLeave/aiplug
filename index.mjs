@@ -38,6 +38,8 @@ export const Config = Schema.object({
     .description('是否导入 Cursor 里已归档的会话'),
   cursorIncludeSubagents: Schema.boolean().default(false)
     .description('是否导入 Cursor 的子代理会话'),
+  codexIncludeInternal: Schema.boolean().default(false)
+    .description('是否导入 Codex 的内部线程（guardian_review / subagent，标题多为同一串，默认跳过）'),
   titlePrefixSource: Schema.boolean().default(true)
     .description('会话标题是否加 `[来源] ` 前缀'),
   streamThresholdBytes: Schema.number().default(200 * 1024 * 1024)

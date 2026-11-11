@@ -79,16 +79,47 @@ the middle column, press **归档到**, then **导入勾选的 N 条**.
 Titles come from, in order:
 
 1. a title the source itself recorded — Claude's `custom-title` / `ai-title`, Codex's
-   `session_index.jsonl` `thread_name`, a Cursor composer `name`;
+   `state_5.sqlite` `threads.name` / `threads.title` (falling back to `session_index.jsonl`
+   `thread_name`), a Cursor composer `name`;
 2. the first line of the first human question, with injected noise stripped (`<system-reminder>`,
    `<user_info>`, `# AGENTS.md instructions`, `@skill:"…"`, Codex review templates), cut at the first
    sentence-final punctuation, at most 56 characters;
 3. `<source> <date time>`;
 4. `<source> conversation N`.
 
-Two traps that are handled explicitly: Codex's `thread_name` contains repeated automation titles
+Three traps that are handled explicitly: Codex's `thread_name` contains repeated automation titles
 (`Guardian review`, `Weekly review`, `hi`) — only names that appear exactly once in the whole index
-are trusted; and an unnamed Cursor composer stores a UUID in `name`, which is treated as no name.
+are trusted; Codex also keeps internal threads (42 `guardian_review`, 60 `subagent`, 8 `automation`
+in a typical install) whose titles are all the same string, so they are skipped and counted as
+“filtered” unless you set `codexIncludeInternal: true`; and an unnamed Cursor composer stores a UUID
+in `name`, which is treated as no name.
+
+## Codex sessions are zstd-compressed now
+
+Newer Codex CLI builds write `~/.codex/sessions/**/rollout-*.jsonl.zst` instead of plain `.jsonl`.
+The reader decompresses with `zlib.zstdDecompressSync` (Node 22.15+ / 24.9+) and feeds the result to
+the same converter, so nothing else changes. Two details worth knowing:
+
+- The ledger key drops the `.zst` suffix, so sessions imported before the format change are still
+  recognised as “already imported” instead of reappearing as new.
+- A single rollout can be large (the biggest one seen here was 218 MB compressed / 301 MB of text,
+  about 1.7 GB of peak memory while converting), so imports run one file at a time.
+
+## The system head invariant (why resumed sessions used to break)
+
+DSH 0.2.1-rc.5 tightened one rule: a `system/message` is only allowed as the **first** node of the
+session surface. Anything else throws `system/message requires a protected first surface head`.
+
+That matters because of how a session with *no* system message behaves: when you resume it and ask
+something, `SystemPromptProjection` finds `head === undefined` and appends a system message in the
+middle of the surface — and the file becomes unreadable. Imported sessions used to have no system
+message at all, so this happened to any imported conversation you continued.
+
+The importer now writes an **empty** `system/message` (`content: []`, `source.kind: 'system-prompt'`)
+right after the first `step/start` and before the first `user/message`. It claims the protected head,
+so later system-prompt updates go through `surfaceOp: replace` instead of a mid-surface append. Older
+imports can be fixed in place with `tools/repair-system-head.mjs`, and `tools/verify-all.mjs`
+revalidates every imported session with DSH's own validator.
 
 ## Grouping
 
@@ -135,8 +166,8 @@ or deleted.
 
 ## Requirements
 
-- DSH `0.2.x` (the `engines.dsh` range in `package.json`).
-- Node.js `^22.19.0 || >=24.9.0`.
+- DSH `0.2.x` (the `engines.dsh` range in `package.json`); last verified against `0.2.1-rc.5`.
+- Node.js `^22.19.0 || >=24.9.0` (zstd support is required for compressed Codex rollouts).
 - Official `@deepseek-ai/*` packages are declared as `peerDependencies`, not bundled.
 
 ## License

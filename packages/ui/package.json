@@ -1,6 +1,6 @@
 {
   "name": "dsh-ai-import-ui",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Web panel for dsh-ai-import: browse local AI-assistant histories, preview each conversation, pick what to import, and file it into a workspace folder.",
   "type": "module",
   "exports": {

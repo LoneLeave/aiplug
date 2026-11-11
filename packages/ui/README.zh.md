@@ -140,6 +140,14 @@
 `done/total` 是来源粒度，`job.activity` / `currentProcessed` / `currentTotal` 来自 `log` 回调
 （`✓`/`✗` 行数 + `待处理 N 条`），是来源内部的细粒度进度；行明细在每次来源完成后追加。
 
+**装好了但面板不出现？先看 profile 的 patch 层。** 插件市场的开关会把
+`- id: ai-import` / `- id: ai-import-ui` + `disabled: true` 写进
+`C:\Users\123\.dsh\profiles\<profile>\cordis.patch.yml`。patch 在 bundle 列表之后应用，所以
+`plugin_manager` 里显示 `enabled:true` 也可能仍然被它关着；用 `plugin_manager set_bundle` 切换只会改
+profile 的 `package.json`，**不会**改这条 patch。症状是 `/api/ai-import/*` 全 404、boot HTML 里没有
+`dsh-ai-import-ui` 的 client 模块。改法：把这两行改成 `disabled: false`（或直接删掉两行），profile 会在
+一秒内自己重放，不用重启 app。
+
 ## 安装与改完怎么生效
 
 ```powershell
